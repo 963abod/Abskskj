@@ -411,6 +411,16 @@ td{
   color:#ff7777;
 }
 
+/* SIDEBAR OVERLAY (mobile) */
+
+.sidebarOverlay{
+  display:none;
+  position:fixed;
+  inset:0;
+  background:#000b;
+  z-index:45;
+}
+
 /* RESPONSIVE */
 
 @media(max-width:850px){
@@ -435,6 +445,10 @@ td{
 
   .topbar{
     align-items:flex-start;
+  }
+
+  .sidebarOverlay.open{
+    display:block;
   }
 }
 </style>
@@ -475,6 +489,8 @@ td{
     </div>
 
     <button
+      id="loginBtn"
+      type="button"
       class="btn btnPrimary loginBtn"
       onclick="handleLogin()"
     >
@@ -491,6 +507,12 @@ td{
 <!-- ADMIN -->
 
 <section id="adminApp" class="hidden">
+
+  <div
+    id="sidebarOverlay"
+    class="sidebarOverlay"
+    onclick="toggleSidebar()"
+  ></div>
 
   <aside class="sidebar" id="sidebar">
 
@@ -855,10 +877,36 @@ const SUPABASE_URL =
 const SUPABASE_ANON_KEY =
   "sb_publishable_SMPHMkAbnBzFg6qxuNx3uw__o-CMXlp";
 
-const db = supabase.createClient(
-  SUPABASE_URL,
-  SUPABASE_ANON_KEY
-);
+let db = null;
+let supabaseInitError = null;
+
+if(typeof supabase === "undefined" || !supabase.createClient){
+
+  supabaseInitError =
+    "تعذر تحميل مكتبة Supabase (supabase-js) من الإنترنت. تحقق من اتصالك بالإنترنت أو من حظر الإعلانات، ثم أعد تحميل الصفحة.";
+
+  console.error(supabaseInitError);
+
+}else{
+
+  try{
+
+    db = supabase.createClient(
+      SUPABASE_URL,
+      SUPABASE_ANON_KEY
+    );
+
+  }catch(initErr){
+
+    supabaseInitError =
+      "خطأ في تهيئة Supabase: " +
+      (initErr?.message || String(initErr));
+
+    console.error(initErr);
+
+  }
+
+}
 
 
 /* =========================================================
@@ -1035,37 +1083,145 @@ function escapeHtml(value){
 
 
 /* =========================================================
+   DOM HELPER
+   ($ was referenced by the login code but was never
+   defined anywhere — that undefined-function crash was
+   the root cause of the login button doing nothing.)
+========================================================= */
+
+function $(id){
+
+  return document.getElementById(id);
+
+}
+
+
+/* =========================================================
    LOGIN
 ========================================================= */
 
 async function handleLogin(){
-  const email=$('loginEmail').value.trim();
-  const password=$('loginPass').value;
-  const e=$('loginError');
 
-  e.classList.remove('hidden');
-  e.style.color='var(--red)';
-  e.textContent='جاري الاتصال بـ Supabase...';
+  const btn = $('loginBtn');
+  const e = $('loginError');
 
   try{
-    const result=await db.auth.signInWithPassword({email,password});
+
+    const emailEl = $('loginEmail');
+    const passEl = $('loginPass');
+
+    if(!emailEl || !passEl || !e){
+
+      console.error('عناصر شاشة تسجيل الدخول غير موجودة في الصفحة.');
+
+      return;
+
+    }
+
+    if(supabaseInitError){
+
+      e.classList.remove('hidden');
+      e.style.color = 'var(--danger)';
+      e.textContent = supabaseInitError;
+
+      return;
+
+    }
+
+    const email = emailEl.value.trim();
+    const password = passEl.value;
+
+    e.classList.remove('hidden');
+
+    if(!email || !password){
+
+      e.style.color = 'var(--danger)';
+      e.textContent = 'الرجاء إدخال البريد الإلكتروني وكلمة المرور.';
+
+      return;
+
+    }
+
+    if(btn) btn.disabled = true;
+
+    e.style.color = 'var(--muted)';
+    e.textContent = 'جاري الاتصال بـ Supabase...';
+
+    const result = await db.auth.signInWithPassword({email,password});
 
     console.log('SUPABASE LOGIN RESULT:',result);
 
     if(result.error){
-      e.textContent='Supabase: '+result.error.message;
+
+      e.style.color = 'var(--danger)';
+      e.textContent = 'خطأ Supabase: ' + result.error.message;
+
       return;
+
     }
 
-    e.style.color='var(--green)';
-    e.textContent='تم تسجيل الدخول بنجاح';
-    showApp();
+    if(!result.data || !result.data.session){
+
+      e.style.color = 'var(--danger)';
+      e.textContent = 'لم يتم إرجاع جلسة صالحة من Supabase.';
+
+      return;
+
+    }
+
+    e.style.color = 'var(--success)';
+    e.textContent = 'تم تسجيل الدخول بنجاح.';
+
+    showAdmin();
 
   }catch(err){
+
     console.error('LOGIN ERROR:',err);
-    e.textContent='خطأ الاتصال: '+(err?.message||String(err));
+
+    if(e){
+
+      e.classList.remove('hidden');
+      e.style.color = 'var(--danger)';
+      e.textContent = 'خطأ في الاتصال: ' + (err?.message || String(err));
+
+    }
+
+  }finally{
+
+    if(btn) btn.disabled = false;
+
   }
+
 }
+
+
+/* =========================================================
+   LOGIN: ENTER KEY SUPPORT
+========================================================= */
+
+(function(){
+
+  const emailEl = $('loginEmail');
+  const passEl = $('loginPass');
+
+  [emailEl, passEl].forEach(function(el){
+
+    if(!el) return;
+
+    el.addEventListener('keydown', function(ev){
+
+      if(ev.key === 'Enter'){
+
+        ev.preventDefault();
+        handleLogin();
+
+      }
+
+    });
+
+  });
+
+})();
 
 /* =========================================================
    LOGOUT
@@ -1073,9 +1229,27 @@ async function handleLogin(){
 
 async function handleLogout(){
 
-  await db.auth.signOut();
+  try{
 
-  location.reload();
+    if(db){
+
+      const {error} = await db.auth.signOut();
+
+      if(error){
+        console.error('LOGOUT ERROR:',error);
+      }
+
+    }
+
+  }catch(err){
+
+    console.error('LOGOUT ERROR:',err);
+
+  }finally{
+
+    location.reload();
+
+  }
 
 }
 
@@ -1108,6 +1282,15 @@ function toggleSidebar(){
   document
     .getElementById("sidebar")
     .classList.toggle("open");
+
+  const overlay =
+    document.getElementById("sidebarOverlay");
+
+  if(overlay){
+
+    overlay.classList.toggle("open");
+
+  }
 
 }
 
@@ -1152,6 +1335,13 @@ document
         .getElementById("sidebar")
         .classList.remove("open");
 
+      const overlay =
+        document.getElementById("sidebarOverlay");
+
+      if(overlay){
+        overlay.classList.remove("open");
+      }
+
     });
 
   });
@@ -1162,6 +1352,17 @@ document
 ========================================================= */
 
 async function refreshAll(){
+
+  if(!db){
+
+    setStatus(
+      supabaseInitError || "عميل Supabase غير مهيأ.",
+      true
+    );
+
+    return;
+
+  }
 
   setStatus(
     "جاري الاتصال بـ Supabase..."
@@ -1535,27 +1736,45 @@ async function saveSiteSettings(){
 
     });
 
-  const {error} =
-    await db
-      .from("site_settings")
-      .update(payload)
-      .eq("id",row.id);
+  try{
 
-  if(error){
+    if(!db){
+      throw new Error(supabaseInitError || "عميل Supabase غير مهيأ.");
+    }
+
+    const {error} =
+      await db
+        .from("site_settings")
+        .update(payload)
+        .eq("id",row.id);
+
+    if(error){
+
+      alert(
+        "خطأ Supabase: " + error.message
+      );
+
+      console.error(error);
+
+      return;
+
+    }
 
     alert(
-      error.message
+      "تم حفظ إعدادات الموقع بنجاح."
     );
 
-    return;
+    await refreshAll();
+
+  }catch(err){
+
+    console.error(err);
+
+    alert(
+      "خطأ: " + (err?.message || String(err))
+    );
 
   }
-
-  alert(
-    "تم حفظ إعدادات الموقع بنجاح."
-  );
-
-  await refreshAll();
 
 }
 
@@ -2244,45 +2463,61 @@ async function saveEditor(){
 
   });
 
-  let result;
+  try{
 
-  if(state.editorId){
+    if(!db){
+      throw new Error(supabaseInitError || "عميل Supabase غير مهيأ.");
+    }
 
-    result =
-      await db
-        .from(table)
-        .update(payload)
-        .eq(
-          "id",
-          state.editorId
-        );
+    let result;
 
-  }else{
+    if(state.editorId){
 
-    result =
-      await db
-        .from(table)
-        .insert(payload);
+      result =
+        await db
+          .from(table)
+          .update(payload)
+          .eq(
+            "id",
+            state.editorId
+          );
 
-  }
+    }else{
 
-  if(result.error){
+      result =
+        await db
+          .from(table)
+          .insert(payload);
+
+    }
+
+    if(result.error){
+
+      alert(
+        "خطأ Supabase: " + result.error.message
+      );
+
+      console.error(
+        result.error
+      );
+
+      return;
+
+    }
+
+    closeModal();
+
+    await refreshAll();
+
+  }catch(err){
+
+    console.error(err);
 
     alert(
-      result.error.message
+      "خطأ: " + (err?.message || String(err))
     );
-
-    console.error(
-      result.error
-    );
-
-    return;
 
   }
-
-  closeModal();
-
-  await refreshAll();
 
 }
 
@@ -2304,27 +2539,43 @@ async function deleteRow(
   if(!confirmed)
     return;
 
-  const {error} =
-    await db
-      .from(table)
-      .delete()
-      .eq("id",id);
+  try{
 
-  if(error){
+    if(!db){
+      throw new Error(supabaseInitError || "عميل Supabase غير مهيأ.");
+    }
+
+    const {error} =
+      await db
+        .from(table)
+        .delete()
+        .eq("id",id);
+
+    if(error){
+
+      alert(
+        "خطأ Supabase: " + error.message
+      );
+
+      console.error(
+        error
+      );
+
+      return;
+
+    }
+
+    await refreshAll();
+
+  }catch(err){
+
+    console.error(err);
 
     alert(
-      error.message
+      "خطأ: " + (err?.message || String(err))
     );
-
-    console.error(
-      error
-    );
-
-    return;
 
   }
-
-  await refreshAll();
 
 }
 
@@ -2335,29 +2586,83 @@ async function deleteRow(
 
 (async function(){
 
-  const {
-    data,
-    error
-  } =
-    await db.auth.getSession();
+  try{
 
-  if(error){
+    if(!db){
 
-    console.error(
+      console.error(
+        supabaseInitError || "عميل Supabase غير مهيأ."
+      );
+
+      return;
+
+    }
+
+    const {
+      data,
       error
-    );
+    } =
+      await db.auth.getSession();
 
-    return;
+    if(error){
 
-  }
+      console.error(
+        error
+      );
 
-  if(data.session){
+      return;
 
-    showAdmin();
+    }
+
+    if(data.session){
+
+      showAdmin();
+
+    }
+
+  }catch(err){
+
+    console.error(err);
 
   }
 
 })();
+
+
+/* =========================================================
+   AUTH STATE CHANGE
+   If the session ends (sign-out, expired/revoked token),
+   automatically return to the login screen instead of
+   leaving a broken dashboard on screen.
+========================================================= */
+
+if(db){
+
+  db.auth.onAuthStateChange(function(event, session){
+
+    if(event === "SIGNED_OUT" || !session){
+
+      const adminApp =
+        document.getElementById("adminApp");
+
+      const loginScreen =
+        document.getElementById("loginScreen");
+
+      if(adminApp && !adminApp.classList.contains("hidden")){
+
+        adminApp.classList.add("hidden");
+
+        if(loginScreen){
+          loginScreen.classList.remove("hidden");
+        }
+
+      }
+
+    }
+
+  });
+
+}
 
 </script>
 
