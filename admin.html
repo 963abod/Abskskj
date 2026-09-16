@@ -1039,52 +1039,33 @@ function escapeHtml(value){
 ========================================================= */
 
 async function handleLogin(){
+  const email=$('loginEmail').value.trim();
+  const password=$('loginPass').value;
+  const e=$('loginError');
 
-  const email =
-    document.getElementById("loginEmail")
-      .value
-      .trim();
+  e.classList.remove('hidden');
+  e.style.color='var(--red)';
+  e.textContent='جاري الاتصال بـ Supabase...';
 
-  const password =
-    document.getElementById("loginPass")
-      .value;
+  try{
+    const result=await db.auth.signInWithPassword({email,password});
 
-  const error =
-    document.getElementById("loginError");
+    console.log('SUPABASE LOGIN RESULT:',result);
 
-  error.textContent = "";
+    if(result.error){
+      e.textContent='Supabase: '+result.error.message;
+      return;
+    }
 
-  if(!email || !password){
+    e.style.color='var(--green)';
+    e.textContent='تم تسجيل الدخول بنجاح';
+    showApp();
 
-    error.textContent =
-      "يرجى إدخال البريد الإلكتروني وكلمة المرور.";
-
-    return;
-
+  }catch(err){
+    console.error('LOGIN ERROR:',err);
+    e.textContent='خطأ الاتصال: '+(err?.message||String(err));
   }
-
-  const { error:loginError } =
-    await db.auth.signInWithPassword({
-
-      email:email,
-
-      password:password
-
-    });
-
-  if(loginError){
-
-    error.textContent =
-      loginError.message;
-
-    return;
-
-  }
-
-  showAdmin();
-
 }
-
 
 /* =========================================================
    LOGOUT
