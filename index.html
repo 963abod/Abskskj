@@ -473,8 +473,8 @@ html[dir="rtl"] .footer-col h4{font-family:var(--font-ar);letter-spacing:0;}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-const SUPABASE_URL = "https://pblbdxocvnkmakrpomsb.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_SMPHMkAbnBzFg6qxuNx3uw__o-CMXlp";
+const SUPABASE_URL = "https://fdocjskqhqiliznavegt.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_tbRC8PHEFt3FwSYp08POPQ_6Fp9UHmJ";
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 </script>
 </head>
@@ -880,18 +880,6 @@ const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   </div>
 </footer>
 
-<!-- Supabase -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script>
-  const SUPABASE_URL = "https://pblbdxocvnkmakrpomsb.supabase.co";
-  const SUPABASE_ANON_KEY = "sb_publishable_SMPHMkAbnBzFg6qxuNx3uw__o-CMXlp";
-
-  const supabaseClient = supabase.createClient(
-    SUPABASE_URL,
-    SUPABASE_ANON_KEY
-  );
-</script>
-  
 <!-- Three.js -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" onerror="window.__threeFailed=true"></script>
 
@@ -994,6 +982,33 @@ var whatsappMsg = {
 };
 var currentLang = "en";
 
+/* ── Dynamic data caches (populated from Supabase, reused on language switch) ── */
+var servicesData = [];
+var projectsData = [];
+var testimonialsData = [];
+
+/* ── Default service icons (cycled through when rendering dynamic services) ── */
+var SERVICE_ICONS = [
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="12" height="12" rx="2.5"/><rect x="9" y="9" width="12" height="12" rx="2.5"/></svg>',
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7L3 12l5 5M16 7l5 5-5 5"/></svg>',
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9h12l-1 11H7L6 9z"/><path d="M9 9V6a3 3 0 0 1 6 0v3"/></svg>',
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="12" r="6"/><circle cx="15" cy="12" r="6"/></svg>',
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7"/><path d="M20 20l-5-5"/></svg>',
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 5-3 8-7 9-4-1-7-4-7-9V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg>'
+];
+
+/* ── HTML escaping helper (used when injecting Supabase data via innerHTML) ── */
+function escapeHTML(str){
+  if(str === null || str === undefined) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+function escapeAttr(str){ return escapeHTML(str); }
+
 
        /* ── Load site settings from Supabase ── */
 async function loadSiteContent(){
@@ -1077,45 +1092,188 @@ async function loadServices(){
 
     if(!data || !data.length) return;
 
-    const cards = document.querySelectorAll(".services-grid .service-card");
-
-    data.forEach(function(service, index){
-      if(!cards[index]) return;
-
-      const card = cards[index];
-
-      const title = currentLang === "ar"
-        ? service.title_ar
-        : service.title_en;
-
-      const description = currentLang === "ar"
-        ? service.description_ar
-        : service.description_en;
-
-      const titleEl = card.querySelector("h3");
-      const descEl = card.querySelector("p");
-
-      if(titleEl && title) titleEl.textContent = title;
-      if(descEl && description) descEl.textContent = description;
-
-      const numEl = card.querySelector(".service-num");
-
-      if(numEl){
-        numEl.textContent = String(index + 1).padStart(2, "0");
-      }
-
-      card.style.display = "";
-    });
-
-    for(let i = data.length; i < cards.length; i++){
-      cards[i].style.display = "none";
-    }
+    servicesData = data;
+    renderServices();
 
   }catch(err){
     console.error("Services error:", err);
   }
 }
-  
+
+/* ── Render services dynamically for the current language ── */
+function renderServices(){
+  var grid = document.querySelector(".services-grid");
+  if(!grid || !servicesData.length) return;
+
+  var html = "";
+
+  servicesData.forEach(function(service, index){
+    var title = (currentLang === "ar" ? service.title_ar : service.title_en) || service.title_ar || service.title_en || "";
+    var description = (currentLang === "ar" ? service.description_ar : service.description_en) || service.description_ar || service.description_en || "";
+    var icon = SERVICE_ICONS[index % SERVICE_ICONS.length];
+    var num = String(index + 1).padStart(2, "0");
+
+    html += '<div class="service-card">'
+          +   '<div class="service-top"><div class="service-icon">' + icon + '</div><span class="service-num">' + num + '</span></div>'
+          +   '<h3>' + escapeHTML(title) + '</h3>'
+          +   '<p>' + escapeHTML(description) + '</p>'
+          + '</div>';
+  });
+
+  grid.innerHTML = html;
+
+  initServiceIconSprings();
+}
+
+/* ── Load projects (portfolio) from Supabase ── */
+async function loadProjects(){
+  try{
+    const { data, error } = await supabaseClient
+      .from("projects")
+      .select("*")
+      .eq("is_active", true)
+      .order("sort_order", { ascending: true });
+
+    if(error){
+      console.error("Projects error:", error);
+      return;
+    }
+
+    if(!data || !data.length) return;
+
+    projectsData = data;
+    renderProjects();
+
+  }catch(err){
+    console.error("Projects error:", err);
+  }
+}
+
+/* ── Render portfolio carousel slides dynamically for the current language ── */
+function renderProjects(){
+  var track = document.getElementById("carouselTrack");
+  if(!track || !projectsData.length) return;
+
+  var viewProjectLabel = currentLang === "ar" ? "عرض المشروع" : "View Project";
+  var html = "";
+
+  projectsData.forEach(function(project, index){
+    var title = (currentLang === "ar" ? project.title_ar : project.title_en) || project.title_ar || project.title_en || "";
+    var category = (currentLang === "ar" ? project.category_ar : project.category_en) || project.category_ar || project.category_en || "";
+    var description = (currentLang === "ar" ? project.description_ar : project.description_en) || project.description_ar || project.description_en || "";
+    var url = project.url || "";
+    var imageUrl = project.image_url || "";
+
+    var previewInner;
+    if(imageUrl && String(imageUrl).trim()){
+      previewInner = '<img src="' + escapeAttr(String(imageUrl).trim()) + '" class="proj-real-img" alt="' + escapeAttr(title) + '" onerror="this.remove();">'
+                    + '<div class="mock-browser" aria-hidden="true">'
+                    +   '<div class="mock-bar"><span></span><span></span><span></span></div>'
+                    +   '<div class="mock-body"><div class="mock-nav"></div><div class="mock-hero"></div>'
+                    +   '<div class="mock-grid"><div></div><div></div><div></div></div></div>'
+                    + '</div>';
+    } else {
+      previewInner = '<div class="mock-browser" aria-hidden="true">'
+                    +   '<div class="mock-bar"><span></span><span></span><span></span></div>'
+                    +   '<div class="mock-body"><div class="mock-nav"></div><div class="mock-hero"></div>'
+                    +   '<div class="mock-grid"><div></div><div></div><div></div></div></div>'
+                    + '</div>';
+    }
+
+    var linkHTML = "";
+    if(url && String(url).trim()){
+      linkHTML = '<a href="' + escapeAttr(String(url).trim()) + '" class="project-link" target="_blank" rel="noopener">'
+               +   '<span>' + escapeHTML(viewProjectLabel) + '</span>'
+               +   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>'
+               + '</a>';
+    }
+
+    html += '<div class="portfolio-slide" role="group" aria-roledescription="slide" aria-label="' + (index + 1) + ' of ' + projectsData.length + '">'
+          +   '<article class="project-card">'
+          +     '<div class="project-preview' + (index === 0 ? ' preview-featured' : ' preview-' + ((index % 4) + 1)) + '">' + previewInner + '</div>'
+          +     '<div class="project-info">'
+          +       '<span class="project-cat">' + escapeHTML(category) + '</span>'
+          +       '<h3>' + escapeHTML(title) + '</h3>'
+          +       '<p>' + escapeHTML(description) + '</p>'
+          +       linkHTML
+          +     '</div>'
+          +   '</article>'
+          + '</div>';
+  });
+
+  track.innerHTML = html;
+
+  initPortfolioCarousel();
+  initCardSprings();
+}
+
+/* ── Load testimonials from Supabase ── */
+async function loadTestimonials(){
+  try{
+    const { data, error } = await supabaseClient
+      .from("testimonials")
+      .select("*")
+      .eq("is_active", true)
+      .order("sort_order", { ascending: true });
+
+    if(error){
+      console.error("Testimonials error:", error);
+      return;
+    }
+
+    if(!data || !data.length) return;
+
+    testimonialsData = data;
+    renderTestimonials();
+
+  }catch(err){
+    console.error("Testimonials error:", err);
+  }
+}
+
+/* ── Render testimonials dynamically for the current language ── */
+function renderTestimonials(){
+  var grid = document.getElementById("testimonialsGrid");
+  var section = document.getElementById("testimonials");
+  if(!grid || !testimonialsData.length) return;
+
+  var starIconFilled = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 21 12 17.77 5.82 21 7 14.14l-5-4.87 6.91-1.01L12 2z"/></svg>';
+  var starIconEmpty  = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 21 12 17.77 5.82 21 7 14.14l-5-4.87 6.91-1.01L12 2z"/></svg>';
+
+  var html = "";
+
+  testimonialsData.forEach(function(t){
+    var name = (currentLang === "ar" ? t.name_ar : t.name_en) || t.name_ar || t.name_en || "";
+    var text = (currentLang === "ar" ? t.text_ar : t.text_en) || t.text_ar || t.text_en || "";
+    var rating = parseInt(t.rating, 10);
+    if(isNaN(rating)) rating = 5;
+    if(rating < 0) rating = 0;
+    if(rating > 5) rating = 5;
+
+    var starsHTML = "";
+    for(var i = 0; i < 5; i++){
+      starsHTML += (i < rating) ? starIconFilled : starIconEmpty;
+    }
+
+    var initial = name ? String(name).trim().charAt(0).toUpperCase() : "?";
+
+    html += '<div class="testimonial-card">'
+          +   '<div class="testimonial-stars">' + starsHTML + '</div>'
+          +   '<p class="testimonial-text">' + escapeHTML(text) + '</p>'
+          +   '<div class="testimonial-author">'
+          +     '<div class="testimonial-avatar">' + escapeHTML(initial) + '</div>'
+          +     '<div class="testimonial-meta"><h4>' + escapeHTML(name) + '</h4></div>'
+          +   '</div>'
+          + '</div>';
+  });
+
+  grid.innerHTML = html;
+
+  if(section){
+    section.style.display = "";
+  }
+}
+
 /* ── Apply SEO & Meta Tags ── */
 function applySEOSettings(){
   var title = (currentLang === "ar" ? siteSettings['seo_title_ar'] : siteSettings['seo_title_en']) || siteSettings['seo_title'] || "";
@@ -1212,6 +1370,12 @@ function applyLink(id, url){
   }
 }
 
+function toggleSection(id, show){
+  var el = document.getElementById(id);
+  if(!el) return;
+  el.style.display = show ? "" : "none";
+}
+
 function applyProject(num, url, imageUrl){
   // Project link button
   var linkEl = document.getElementById("proj"+num+"-link");
@@ -1260,6 +1424,12 @@ function applyLanguage(lang){
   var waFoot = document.getElementById("whatsappFooterLink");
   if(waBtn)  waBtn.setAttribute("href", waUrl);
   if(waFoot) waFoot.setAttribute("href", waUrl);
+
+  // Re-render dynamic Supabase-backed sections with the new language,
+  // instantly and without a page reload, using the already-fetched data.
+  if(servicesData.length)     renderServices();
+  if(projectsData.length)     renderProjects();
+  if(testimonialsData.length) renderTestimonials();
 }
 
 function initLangSwitch(){
@@ -1476,7 +1646,17 @@ function initHero3D(){
   }catch(err){if(fallback)fallback.classList.add("is-active");if(window.console)console.warn("Hero 3D error:",err);}
 }
 
-/* ── Portfolio Carousel Implementation ── */
+/* ── Portfolio Carousel Implementation ──
+   Safe to call this function multiple times (e.g. once on the static
+   markup at load, and again after renderProjects() regenerates the
+   slides from Supabase data / on every language switch). Listeners on
+   the persistent control elements (prev/next buttons, wrapper, track
+   container) are attached only once via the wrapper.__carouselBound
+   guard; they always call through carouselState.api, which is
+   reassigned to fresh closures on every invocation so the controls
+   stay in sync with whatever slides currently exist in the DOM. ── */
+var carouselState = null;
+
 function initPortfolioCarousel(){
   var wrapper = document.getElementById("portfolioCarousel");
   var trackContainer = document.getElementById("carouselTrackContainer");
@@ -1492,12 +1672,13 @@ function initPortfolioCarousel(){
   var totalSlides = slides.length;
   if(totalSlides === 0) return;
 
-  var currentIndex = 0;
-  var isPlaying = true;
-  var timer = null;
-  var startX = 0, currentX = 0, isSwiping = false;
-
   var reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  if(!carouselState){
+    carouselState = { currentIndex:0, isPlaying:true, timer:null, startX:0, currentX:0, isSwiping:false, api:null };
+  }
+  if(carouselState.timer){ clearInterval(carouselState.timer); carouselState.timer = null; }
+  carouselState.currentIndex = 0;
 
   // Build dots
   dotsContainer.innerHTML = "";
@@ -1512,18 +1693,18 @@ function initPortfolioCarousel(){
 
   function updateCarousel(){
     var isRTL = document.documentElement.dir === "rtl";
-    var offset = currentIndex * 100;
+    var offset = carouselState.currentIndex * 100;
     track.style.transform = "translateX(" + (isRTL ? offset : -offset) + "%)";
 
     // Update dots
     var dots = dotsContainer.querySelectorAll(".carousel-dot");
     dots.forEach(function(dot, idx){
-      dot.classList.toggle("is-active", idx === currentIndex);
+      dot.classList.toggle("is-active", idx === carouselState.currentIndex);
     });
 
     // Update counter
     if(counterEl){
-      var currentFormatted = (currentIndex + 1 < 10 ? "0" : "") + (currentIndex + 1);
+      var currentFormatted = (carouselState.currentIndex + 1 < 10 ? "0" : "") + (carouselState.currentIndex + 1);
       var totalFormatted = (totalSlides < 10 ? "0" : "") + totalSlides;
       counterEl.textContent = currentFormatted + " / " + totalFormatted;
     }
@@ -1534,95 +1715,108 @@ function initPortfolioCarousel(){
   }
 
   function goToSlide(index){
-    currentIndex = (index + totalSlides) % totalSlides;
+    carouselState.currentIndex = (index + totalSlides) % totalSlides;
     updateCarousel();
   }
 
   function nextSlide(){
-    goToSlide(currentIndex + 1);
+    goToSlide(carouselState.currentIndex + 1);
   }
 
   function prevSlide(){
-    goToSlide(currentIndex - 1);
+    goToSlide(carouselState.currentIndex - 1);
   }
 
-  prevBtn.addEventListener("click", function(){ prevSlide(); stopTimer(); startTimer(); });
-  nextBtn.addEventListener("click", function(){ nextSlide(); stopTimer(); startTimer(); });
-
-  // Keyboard navigation
-  wrapper.addEventListener("keydown", function(e){
-    if(e.key === "ArrowLeft"){
-      document.documentElement.dir === "rtl" ? nextSlide() : prevSlide();
-      stopTimer(); startTimer();
-    } else if(e.key === "ArrowRight"){
-      document.documentElement.dir === "rtl" ? prevSlide() : nextSlide();
-      stopTimer(); startTimer();
-    }
-  });
-
-  // Touch & Swipe gestures
-  trackContainer.addEventListener("touchstart", function(e){
-    if(e.touches && e.touches[0]){
-      startX = e.touches[0].clientX;
-      isSwiping = true;
-      stopTimer();
-    }
-  }, {passive:true});
-
-  trackContainer.addEventListener("touchmove", function(e){
-    if(!isSwiping || !e.touches || !e.touches[0]) return;
-    currentX = e.touches[0].clientX;
-  }, {passive:true});
-
-  trackContainer.addEventListener("touchend", function(){
-    if(!isSwiping) return;
-    var diff = startX - currentX;
-    var isRTL = document.documentElement.dir === "rtl";
-    if(Math.abs(diff) > 40){
-      if(diff > 0){
-        isRTL ? prevSlide() : nextSlide();
-      } else {
-        isRTL ? nextSlide() : prevSlide();
-      }
-    }
-    isSwiping = false;
-    startTimer();
-  });
-
-  // Pause on hover & focus (UI UX Pro Max requirement)
   function stopTimer(){
-    if(timer){ clearInterval(timer); timer = null; }
+    if(carouselState.timer){ clearInterval(carouselState.timer); carouselState.timer = null; }
   }
 
   function startTimer(){
     stopTimer();
-    if(!reducedMotion && isPlaying){
-      timer = setInterval(nextSlide, 5000);
+    if(!reducedMotion && carouselState.isPlaying){
+      carouselState.timer = setInterval(nextSlide, 5000);
     }
   }
 
-  wrapper.addEventListener("mouseenter", stopTimer);
-  wrapper.addEventListener("mouseleave", startTimer);
-  wrapper.addEventListener("focusin", stopTimer);
-  wrapper.addEventListener("focusout", startTimer);
+  // Expose the freshest closures (bound to the slides currently in the DOM)
+  // so listeners attached once below always act on up-to-date data.
+  carouselState.api = {
+    nextSlide: nextSlide,
+    prevSlide: prevSlide,
+    goToSlide: goToSlide,
+    stopTimer: stopTimer,
+    startTimer: startTimer
+  };
 
-  // IntersectionObserver to pause offscreen
-  if("IntersectionObserver" in window){
-    var observer = new IntersectionObserver(function(entries){
-      entries.forEach(function(entry){
-        if(entry.isIntersecting){
-          startTimer();
+  if(!wrapper.__carouselBound){
+    wrapper.__carouselBound = true;
+
+    prevBtn.addEventListener("click", function(){ carouselState.api.prevSlide(); carouselState.api.stopTimer(); carouselState.api.startTimer(); });
+    nextBtn.addEventListener("click", function(){ carouselState.api.nextSlide(); carouselState.api.stopTimer(); carouselState.api.startTimer(); });
+
+    // Keyboard navigation
+    wrapper.addEventListener("keydown", function(e){
+      if(e.key === "ArrowLeft"){
+        document.documentElement.dir === "rtl" ? carouselState.api.nextSlide() : carouselState.api.prevSlide();
+        carouselState.api.stopTimer(); carouselState.api.startTimer();
+      } else if(e.key === "ArrowRight"){
+        document.documentElement.dir === "rtl" ? carouselState.api.prevSlide() : carouselState.api.nextSlide();
+        carouselState.api.stopTimer(); carouselState.api.startTimer();
+      }
+    });
+
+    // Touch & Swipe gestures
+    trackContainer.addEventListener("touchstart", function(e){
+      if(e.touches && e.touches[0]){
+        carouselState.startX = e.touches[0].clientX;
+        carouselState.isSwiping = true;
+        carouselState.api.stopTimer();
+      }
+    }, {passive:true});
+
+    trackContainer.addEventListener("touchmove", function(e){
+      if(!carouselState.isSwiping || !e.touches || !e.touches[0]) return;
+      carouselState.currentX = e.touches[0].clientX;
+    }, {passive:true});
+
+    trackContainer.addEventListener("touchend", function(){
+      if(!carouselState.isSwiping) return;
+      var diff = carouselState.startX - carouselState.currentX;
+      var isRTL = document.documentElement.dir === "rtl";
+      if(Math.abs(diff) > 40){
+        if(diff > 0){
+          isRTL ? carouselState.api.prevSlide() : carouselState.api.nextSlide();
         } else {
-          stopTimer();
+          isRTL ? carouselState.api.nextSlide() : carouselState.api.prevSlide();
         }
-      });
-    }, {threshold: 0.2});
-    observer.observe(wrapper);
-  } else {
-    startTimer();
+      }
+      carouselState.isSwiping = false;
+      carouselState.api.startTimer();
+    });
+
+    // Pause on hover & focus
+    wrapper.addEventListener("mouseenter", function(){ carouselState.api.stopTimer(); });
+    wrapper.addEventListener("mouseleave", function(){ carouselState.api.startTimer(); });
+    wrapper.addEventListener("focusin", function(){ carouselState.api.stopTimer(); });
+    wrapper.addEventListener("focusout", function(){ carouselState.api.startTimer(); });
+
+    // IntersectionObserver to pause offscreen
+    if("IntersectionObserver" in window){
+      var observer = new IntersectionObserver(function(entries){
+        entries.forEach(function(entry){
+          if(entry.isIntersecting){
+            carouselState.api.startTimer();
+          } else {
+            carouselState.api.stopTimer();
+          }
+        });
+      }, {threshold: 0.2});
+      observer.observe(wrapper);
+    }
   }
 
   updateCarousel();
+  carouselState.api.startTimer();
 }
 
 /* ── Footer year ── */
@@ -1637,6 +1831,8 @@ document.addEventListener("DOMContentLoaded",function(){
   try { savedLang = localStorage.getItem("aboudweb_lang") || "ar"; } catch(e){}
   loadSiteContent();
   loadServices();
+  loadProjects();
+  loadTestimonials();
   applyLanguage(savedLang);
   initThemeToggle();
   initLangSwitch();
