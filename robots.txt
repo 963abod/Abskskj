@@ -1,4 +1,5 @@
 User-agent: *
-Allow: /
+Disallow: /admin.html
+Disallow: /admin
 
-# Sitemap URL will be added after the final domain is connected.
+Allow: /
